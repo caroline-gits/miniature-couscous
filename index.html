@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Reconciliation</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --surface: #ffffff;
+    --border: #e2e0d8;
+    --border-light: #eeece6;
+    --text: #1a1916;
+    --text-muted: #6b6860;
+    --text-faint: #9e9c96;
+    --accent: #1a1916;
+    --danger-bg: #fdf1f0;
+    --danger-text: #9b2c2c;
+    --warning-bg: #fdf8ed;
+    --warning-text: #92610a;
+    --success-bg: #f0faf4;
+    --success-text: #1a6b3c;
+    --info-bg: #f0f4fd;
+    --info-text: #2a4fa8;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #18181a;
+      --surface: #222226;
+      --border: #333338;
+      --border-light: #2a2a2e;
+      --text: #f0efe8;
+      --text-muted: #9b9a94;
+      --text-faint: #5e5d58;
+      --accent: #f0efe8;
+      --danger-bg: #2d1a1a;
+      --danger-text: #f28b82;
+      --warning-bg: #2a2210;
+      --warning-text: #f4b942;
+      --success-bg: #0f2318;
+      --success-text: #5ecb8a;
+      --info-bg: #0f1a2e;
+      --info-text: #7ba8f5;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+  .container { max-width: 640px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+  h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; margin-bottom: 0.25rem; }
+  .subtitle { font-size: 14px; color: var(--text-muted); margin-bottom: 2rem; }
+
+  /* API key section */
+  .key-section { margin-bottom: 1.75rem; }
+  .key-row { display: flex; gap: 8px; align-items: center; }
+  .key-input { flex: 1; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 9px 12px; font-size: 13px; color: var(--text); font-family: monospace; outline: none; }
+  .key-input:focus { border-color: var(--text-muted); }
+  .key-input::placeholder { color: var(--text-faint); }
+  .key-status { font-size: 12px; margin-top: 6px; }
+  .key-status.ok { color: var(--success-text); }
+  .key-status.missing { color: var(--text-faint); }
+
+  /* Section label */
+  .label { font-size: 11px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.6rem; }
+
+  /* Account cards */
+  .accounts { display: flex; flex-direction: column; gap: 8px; margin-bottom: 1.5rem; }
+  .account-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .account-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+  .account-title { font-size: 14px; font-weight: 600; }
+  .account-buckets { font-size: 11px; color: var(--text-muted); margin-left: auto; text-align: right; max-width: 55%; line-height: 1.5; }
+  .upload-slots { display: flex; flex-direction: column; gap: 6px; }
+  .upload-slot { display: flex; align-items: center; gap: 8px; border: 1px dashed var(--border); border-radius: var(--radius-sm); padding: 8px 12px; cursor: pointer; transition: background 0.12s; }
+  .upload-slot:hover { background: var(--bg); }
+  .upload-slot input { display: none; }
+  .slot-icon { font-size: 16px; flex-shrink: 0; color: var(--text-faint); }
+  .slot-label { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .slot-badge { font-size: 11px; background: var(--info-bg); color: var(--info-text); padding: 2px 8px; border-radius: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; display: inline-block; }
+  .slot-note { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+
+  /* Run button */
+  .run-btn { width: 100%; background: var(--text); color: var(--bg); border: none; border-radius: var(--radius); padding: 13px; font-size: 15px; font-weight: 600; cursor: pointer; letter-spacing: -0.01em; transition: opacity 0.15s; }
+  .run-btn:hover { opacity: 0.85; }
+  .run-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  /* Status */
+  .status { text-align: center; font-size: 13px; color: var(--text-muted); padding: 1rem 0; min-height: 3rem; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--text-muted); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Error */
+  .error-box { background: var(--danger-bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; font-size: 12px; color: var(--danger-text); font-family: monospace; white-space: pre-wrap; word-break: break-all; margin-bottom: 1rem; }
+
+  /* Results */
+  .results { margin-top: 0.5rem; }
+  .summary-text { font-size: 14px; color: var(--text); margin-bottom: 1.25rem; line-height: 1.6; }
+  .result-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1.25rem; }
+  .result-card-header { padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; justify-content: space-between; }
+  .result-card-title { font-size: 13px; font-weight: 600; }
+  .count-badge { font-size: 11px; background: var(--bg); border: 1px solid var(--border); border-radius: 20px; padding: 2px 8px; color: var(--text-muted); }
+  .empty { font-size: 13px; color: var(--text-faint); text-align: center; padding: 1.5rem; }
+
+  /* Flagged items */
+  .flag-item { display: grid; grid-template-columns: 1fr auto; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--border-light); align-items: start; }
+  .flag-item:last-child { border-bottom: none; }
+  .flag-merchant { font-size: 13px; font-weight: 500; }
+  .flag-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .flag-wrong { font-size: 11px; margin-top: 4px; }
+  .flag-wrong .from { color: var(--danger-text); }
+  .flag-wrong .arrow { color: var(--text-faint); margin: 0 3px; }
+  .flag-wrong .to { color: var(--success-text); font-weight: 500; }
+  .flag-amount { font-size: 13px; font-weight: 600; text-align: right; }
+  .wrong-tag { display: inline-block; font-size: 10px; background: var(--warning-bg); color: var(--warning-text); padding: 1px 6px; border-radius: 10px; margin-top: 4px; }
+
+  /* Transfer items */
+  .transfer-item { padding: 12px 16px; border-bottom: 1px solid var(--border-light); display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .transfer-item:last-child { border-bottom: none; }
+  .transfer-flow { display: flex; align-items: center; gap: 6px; flex: 1; }
+  .t-from { font-size: 13px; font-weight: 500; color: var(--danger-text); }
+  .t-arrow { color: var(--text-faint); font-size: 13px; }
+  .t-to { font-size: 13px; font-weight: 500; color: var(--success-text); }
+  .t-amount { font-size: 14px; font-weight: 700; color: var(--text); margin-left: auto; }
+  .t-reason { font-size: 11px; color: var(--text-muted); width: 100%; margin-top: 4px; }
+
+  a.api-link { font-size: 12px; color: var(--info-text); text-decoration: none; }
+  a.api-link:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Monthly reconciliation</h1>
+  <p class="subtitle">Upload your bank statements — get the transfers you need to make.</p>
+
+  <div class="key-section">
+    <div class="label">Anthropic API key</div>
+    <div class="key-row">
+      <input class="key-input" type="password" id="api-key" placeholder="sk-ant-..." autocomplete="off" oninput="onKeyInput()">
+    </div>
+    <div class="key-status missing" id="key-status">Enter your key to enable analysis. <a class="api-link" href="https://console.anthropic.com/settings/keys" target="_blank">Get one here →</a></div>
+  </div>
+
+  <div class="label">Statements</div>
+  <div class="accounts" id="accounts"></div>
+
+  <button class="run-btn" id="run-btn" disabled>Analyse statements</button>
+  <div class="status" id="status"></div>
+  <div id="error-box"></div>
+  <div class="results" id="results"></div>
+</div>
+
+<script>
+const ACCOUNTS = [
+  { id:"starling", name:"Starling", color:"#4A90D9",
+    buckets:["Bills & Life","Choir","Savings / Emergency Fund","Massages","Long-Term Bills & Life","Charity","Wedding Gifts"],
+    inputs:[
+      { id:"starling-pdf", label:"Statement PDF", accept:".pdf,application/pdf", note:null },
+      { id:"starling-shots", label:"Space screenshots (select all at once)", accept:"image/*,.pdf", multiple:true, note:null }
+    ]
+  },
+  { id:"revolut", name:"Revolut", color:"#7B61FF",
+    buckets:["Fun","Travel"],
+    inputs:[{ id:"revolut-pdf", label:"Statement PDF", accept:".pdf,application/pdf", note:"Reference field identifies the space" }]
+  },
+  { id:"n26", name:"N26", color:"#00BCD4",
+    buckets:["Fun"],
+    inputs:[{ id:"n26-pdf", label:"Statement PDF", accept:".pdf,application/pdf", note:null }]
+  },
+  { id:"amex", name:"Amex", color:"#2E7D32",
+    buckets:["Bills & Life"],
+    inputs:[{ id:"amex-pdf", label:"Statement PDF", accept:".pdf,application/pdf", note:null }]
+  },
+  { id:"bnp", name:"BNP", color:"#E65100",
+    buckets:["Fun","Savings"],
+    inputs:[
+      { id:"bnp-fun", label:"Fun account PDF", accept:".pdf,application/pdf", note:null },
+      { id:"bnp-sav", label:"Savings account PDF", accept:".pdf,application/pdf", note:null }
+    ]
+  },
+  { id:"boa", name:"Bank of America", color:"#C62828",
+    buckets:["Fun"],
+    inputs:[
+      { id:"boa-1", label:"PDF 1", accept:".pdf,application/pdf", note:null },
+      { id:"boa-2", label:"PDF 2", accept:".pdf,application/pdf", note:null }
+    ]
+  }
+];
+
+const fileStore = {};
+let apiKey = "";
+
+function onKeyInput() {
+  apiKey = document.getElementById("api-key").value.trim();
+  const el = document.getElementById("key-status");
+  if (apiKey.startsWith("sk-ant-") && apiKey.length > 20) {
+    el.textContent = "Key looks good.";
+    el.className = "key-status ok";
+  } else {
+    el.innerHTML = 'Enter your key to enable analysis. <a class="api-link" href="https://console.anthropic.com/settings/keys" target="_blank">Get one here →</a>';
+    el.className = "key-status missing";
+  }
+  updateBtn();
+}
+
+function renderAccounts() {
+  document.getElementById("accounts").innerHTML = ACCOUNTS.map(acc => `
+    <div class="account-card">
+      <div class="account-header">
+        <div class="dot" style="background:${acc.color}"></div>
+        <div class="account-title">${acc.name}</div>
+        <div class="account-buckets">${acc.buckets.join(" · ")}</div>
+      </div>
+      <div class="upload-slots">
+        ${acc.inputs.map(inp => `
+          <div class="upload-slot" onclick="document.getElementById('${inp.id}').click()">
+            <input type="file" id="${inp.id}" accept="${inp.accept}" ${inp.multiple ? "multiple" : ""} onchange="handleFile(event,'${acc.id}','${inp.id}')">
+            <span class="slot-icon">↑</span>
+            <div style="min-width:0;flex:1">
+              <div class="slot-label" id="${inp.id}-label">${inp.label}</div>
+              ${inp.note ? `<div class="slot-note">${inp.note}</div>` : ""}
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+function handleFile(e, accId, inputId) {
+  const files = Array.from(e.target.files);
+  if (!files.length) return;
+  if (!fileStore[accId]) fileStore[accId] = {};
+  fileStore[accId][inputId] = files;
+  const label = document.getElementById(inputId + "-label");
+  label.innerHTML = `<span class="slot-badge">${files.length > 1 ? files.length + " files selected" : files[0].name}</span>`;
+  updateBtn();
+}
+
+function updateBtn() {
+  const hasFiles = Object.keys(fileStore).length > 0;
+  const hasKey = apiKey.startsWith("sk-ant-") && apiKey.length > 20;
+  document.getElementById("run-btn").disabled = !(hasFiles && hasKey);
+}
+
+function setStatus(text, spinner) {
+  const el = document.getElementById("status");
+  el.innerHTML = spinner ? `<div class="spinner"></div><span>${text}</span>` : `<span>${text}</span>`;
+}
+
+function showError(msg) {
+  document.getElementById("error-box").innerHTML = `<div class="error-box">${msg}</div>`;
+}
+
+function clearError() {
+  document.getElementById("error-box").innerHTML = "";
+}
+
+async function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => {
+      if (!r.result || !r.result.includes(",")) { rej(new Error("Unexpected FileReader result for " + file.name)); return; }
+      res(r.result.split(",")[1]);
+    };
+    r.onerror = () => rej(new Error("Could not read " + file.name + ": " + (r.error ? r.error.message : "unknown error")));
+    r.readAsDataURL(file);
+  });
+}
+
+function mediaType(file) {
+  if (file.type === "application/pdf") return "application/pdf";
+  if (file.type && file.type.startsWith("image/")) return file.type;
+  if (file.name.toLowerCase().endsWith(".pdf")) return "application/pdf";
+  return "application/pdf";
+}
+
+async function buildMessages() {
+  const content = [];
+  content.push({ type: "text", text: `You are a bank reconciliation assistant. Analyse the uploaded bank statements and screenshots. For each account, identify transactions that belong to the wrong bucket, then calculate the minimum net transfers needed to reconcile everything.
+
+ACCOUNT CONFIGURATION:
+- Starling: buckets = Bills & Life, Choir, Savings / Emergency Fund, Massages, Long-Term Bills & Life, Charity, Wedding Gifts. The main PDF shows all spaces merged — use the space screenshots to attribute transactions to specific spaces.
+- Revolut: buckets = Fun, Travel. Use the "reference" field to identify which space each transaction belongs to.
+- N26: bucket = Fun.
+- Amex: bucket = Bills & Life.
+- BNP (Fun PDF): bucket = Fun.
+- BNP (Savings PDF): bucket = Savings.
+- Bank of America: bucket = Fun. Two PDFs cover the same bucket.
+
+BUCKET DEFINITIONS (use these to classify transactions):
+- Bills & Life: utilities, phone, internet, subscriptions, insurance, groceries, household goods
+- Long-Term Bills & Life: rent, mortgage, annual fees, loan repayments
+- Choir: choir dues, sheet music, rehearsal costs, choir-related travel
+- Savings / Emergency Fund: savings transfers, emergency fund deposits
+- Massages: massage therapy, spa treatments, bodywork
+- Charity: donations, charitable giving, fundraising
+- Wedding Gifts: wedding gifts, hen/stag dos, related purchases
+- Fun: restaurants, bars, cafes, entertainment, leisure shopping, personal treats, cinema, concerts
+- Travel: flights, hotels, Airbnb, transport bookings, travel insurance
+- Savings (BNP): savings deposits in the BNP account
+
+INSTRUCTIONS:
+1. Extract all debit transactions from each document.
+2. For each transaction, determine if it matches the account's assigned bucket(s).
+3. Flag any that don't belong — note the account, merchant, amount, currency, date, actual bucket (which account paid it), and correct bucket (where it should have come from).
+4. Calculate net reconciliation transfers. If account A overpaid for account B's expenses by X, and account B overpaid for account A's expenses by Y, the net transfer is (X-Y) from the one that owes the other. Show the minimum number of transfers needed.
+5. Show transfer amounts in the destination account's currency where possible.
+
+Respond ONLY with valid JSON, no markdown fences, no explanation outside the JSON:
+{
+  "flagged": [
+    {
+      "account": "account name",
+      "merchant": "merchant or description",
+      "amount": "numeric string",
+      "currency": "ISO code e.g. GBP",
+      "date": "date string",
+      "actual_bucket": "bucket this account is assigned to",
+      "should_be_bucket": "bucket this transaction actually belongs to"
+    }
+  ],
+  "transfers": [
+    {
+      "from_account": "account name",
+      "to_account": "account name",
+      "amount": "numeric string",
+      "currency": "ISO code",
+      "reason": "brief explanation"
+    }
+  ],
+  "summary": "One sentence summary of findings."
+}` });
+
+  for (const acc of ACCOUNTS) {
+    if (!fileStore[acc.id]) continue;
+    content.push({ type: "text", text: `\n=== ${acc.name} ===` });
+    for (const [inputId, files] of Object.entries(fileStore[acc.id])) {
+      for (const file of files) {
+        const mt = mediaType(file);
+        const b64 = await fileToBase64(file);
+        if (mt === "application/pdf") {
+          content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: `${acc.name} — ${file.name}` });
+        } else {
+          content.push({ type: "image", source: { type: "base64", media_type: mt, data: b64 } });
+        }
+      }
+    }
+  }
+  return content;
+}
+
+function renderResults(data) {
+  const flagged = data.flagged || [];
+  const transfers = data.transfers || [];
+  document.getElementById("results").innerHTML = `
+    ${data.summary ? `<p class="summary-text">${data.summary}</p>` : ""}
+
+    <div class="result-card">
+      <div class="result-card-header">
+        <span class="result-card-title">Flagged transactions</span>
+        <span class="count-badge">${flagged.length}</span>
+      </div>
+      ${flagged.length === 0
+        ? `<div class="empty">No mismatched transactions found — everything looks clean.</div>`
+        : flagged.map(f => `
+          <div class="flag-item">
+            <div>
+              <div class="flag-merchant">${f.merchant}</div>
+              <div class="flag-meta">${f.account}${f.date ? " · " + f.date : ""}</div>
+              <div class="flag-wrong">
+                <span class="from">${f.actual_bucket}</span>
+                <span class="arrow">→</span>
+                <span class="to">${f.should_be_bucket}</span>
+              </div>
+              <span class="wrong-tag">wrong bucket</span>
+            </div>
+            <div class="flag-amount">${f.currency} ${f.amount}</div>
+          </div>`).join("")}
+    </div>
+
+    <div class="result-card">
+      <div class="result-card-header">
+        <span class="result-card-title">Transfers to reconcile</span>
+        <span class="count-badge">${transfers.length}</span>
+      </div>
+      ${transfers.length === 0
+        ? `<div class="empty">No transfers needed.</div>`
+        : transfers.map(t => `
+          <div class="transfer-item">
+            <div class="transfer-flow">
+              <span class="t-from">${t.from_account}</span>
+              <span class="t-arrow">→</span>
+              <span class="t-to">${t.to_account}</span>
+            </div>
+            <span class="t-amount">${t.currency} ${t.amount}</span>
+            ${t.reason ? `<span class="t-reason">${t.reason}</span>` : ""}
+          </div>`).join("")}
+    </div>
+  `;
+}
+
+document.getElementById("run-btn").addEventListener("click", async () => {
+  const btn = document.getElementById("run-btn");
+  btn.disabled = true;
+  clearError();
+  document.getElementById("results").innerHTML = "";
+
+  let content;
+  try {
+    setStatus("Reading files…", true);
+    content = await buildMessages();
+  } catch(e) {
+    showError("File reading failed:\n" + e.message);
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  let response;
+  try {
+    setStatus("Sending to Claude for analysis…", true);
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 4000,
+        messages: [{ role: "user", content }]
+      })
+    });
+  } catch(e) {
+    showError("Network error — could not reach the API:\n" + e.message);
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    showError("API error " + response.status + ":\n" + errText);
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  let data;
+  try {
+    setStatus("Parsing results…", true);
+    data = await response.json();
+  } catch(e) {
+    showError("Could not parse API response:\n" + e.message);
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  const raw = (data.content || []).map(i => i.text || "").join("");
+  if (!raw) {
+    showError("API returned empty content.\nFull response:\n" + JSON.stringify(data, null, 2));
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  let parsed;
+  try {
+    const clean = raw.replace(/```json|```/g, "").trim();
+    parsed = JSON.parse(clean);
+  } catch(e) {
+    showError("Could not parse JSON from response:\n" + e.message + "\n\nRaw response (first 600 chars):\n" + raw.substring(0, 600));
+    setStatus("", false);
+    btn.disabled = false;
+    return;
+  }
+
+  setStatus("", false);
+  renderResults(parsed);
+  btn.disabled = false;
+});
+
+renderAccounts();
+</script>
+</body>
+</html>
