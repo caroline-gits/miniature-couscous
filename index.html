@@ -257,11 +257,45 @@ function clearError() {
 }
 
 async function fileToBase64(file) {
+  const mt = mediaType(file);
+  // PDFs go straight through — no resizing
+  if (mt === "application/pdf") {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => {
+        if (!r.result || !r.result.includes(",")) { rej(new Error("Unexpected FileReader result for " + file.name)); return; }
+        res(r.result.split(",")[1]);
+      };
+      r.onerror = () => rej(new Error("Could not read " + file.name + ": " + (r.error ? r.error.message : "unknown error")));
+      r.readAsDataURL(file);
+    });
+  }
+  // Images: resize if either dimension > 1900px
+  const MAX = 1900;
   return new Promise((res, rej) => {
     const r = new FileReader();
     r.onload = () => {
-      if (!r.result || !r.result.includes(",")) { rej(new Error("Unexpected FileReader result for " + file.name)); return; }
-      res(r.result.split(",")[1]);
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width <= MAX && height <= MAX) {
+          // No resize needed
+          res(r.result.split(",")[1]);
+          return;
+        }
+        const scale = Math.min(MAX / width, MAX / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+        res(dataUrl.split(",")[1]);
+      };
+      img.onerror = () => rej(new Error("Could not decode image: " + file.name));
+      img.src = r.result;
     };
     r.onerror = () => rej(new Error("Could not read " + file.name + ": " + (r.error ? r.error.message : "unknown error")));
     r.readAsDataURL(file);
@@ -342,7 +376,8 @@ Respond ONLY with valid JSON, no markdown fences, no explanation outside the JSO
         if (mt === "application/pdf") {
           content.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: b64 }, title: `${acc.name} — ${file.name}` });
         } else {
-          content.push({ type: "image", source: { type: "base64", media_type: mt, data: b64 } });
+          // After canvas resize, output is always JPEG
+          content.push({ type: "image", source: { type: "base64", media_type: "image/jpeg", data: b64 } });
         }
       }
     }
