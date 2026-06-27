@@ -341,7 +341,7 @@ INSTRUCTIONS:
 4. Calculate net reconciliation transfers. If account A overpaid for account B's expenses by X, and account B overpaid for account A's expenses by Y, the net transfer is (X-Y) from the one that owes the other. Show the minimum number of transfers needed.
 5. Show transfer amounts in the destination account's currency where possible.
 
-Respond ONLY with valid JSON, no markdown fences, no explanation outside the JSON:
+Do all your reasoning and analysis silently. Do not write out your thought process, observations, or commentary as text. Your entire response must be a single valid JSON object and nothing else — no preamble, no markdown fences, no explanation before or after it. The first character of your response must be { and the last character must be }.
 {
   "flagged": [
     {
@@ -465,7 +465,7 @@ document.getElementById("run-btn").addEventListener("click", async () => {
       },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
-        max_tokens: 4000,
+        max_tokens: 8000,
         messages: [{ role: "user", content }]
       })
     });
@@ -505,7 +505,13 @@ document.getElementById("run-btn").addEventListener("click", async () => {
 
   let parsed;
   try {
-    const clean = raw.replace(/```json|```/g, "").trim();
+    let clean = raw.replace(/```json|```/g, "").trim();
+    // If there's reasoning text before/after the JSON object, extract just the {...} block
+    const firstBrace = clean.indexOf("{");
+    const lastBrace = clean.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      clean = clean.substring(firstBrace, lastBrace + 1);
+    }
     parsed = JSON.parse(clean);
   } catch(e) {
     showError("Could not parse JSON from response:\n" + e.message + "\n\nRaw response (first 600 chars):\n" + raw.substring(0, 600));
