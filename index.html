@@ -341,30 +341,7 @@ INSTRUCTIONS:
 4. Calculate net reconciliation transfers. If account A overpaid for account B's expenses by X, and account B overpaid for account A's expenses by Y, the net transfer is (X-Y) from the one that owes the other. Show the minimum number of transfers needed.
 5. Show transfer amounts in the destination account's currency where possible.
 
-Do all your reasoning and analysis silently. Do not write out your thought process, observations, or commentary as text. Your entire response must be a single valid JSON object and nothing else — no preamble, no markdown fences, no explanation before or after it. The first character of your response must be { and the last character must be }.
-{
-  "flagged": [
-    {
-      "account": "account name",
-      "merchant": "merchant or description",
-      "amount": "numeric string",
-      "currency": "ISO code e.g. GBP",
-      "date": "date string",
-      "actual_bucket": "bucket this account is assigned to",
-      "should_be_bucket": "bucket this transaction actually belongs to"
-    }
-  ],
-  "transfers": [
-    {
-      "from_account": "account name",
-      "to_account": "account name",
-      "amount": "numeric string",
-      "currency": "ISO code",
-      "reason": "brief explanation"
-    }
-  ],
-  "summary": "One sentence summary of findings."
-}` });
+Take your time reasoning through the transactions — you may think out loud as much as you need to. Once your analysis is complete, call the record_reconciliation tool with your final results.` });
 
   for (const acc of ACCOUNTS) {
     if (!fileStore[acc.id]) continue;
@@ -466,7 +443,51 @@ document.getElementById("run-btn").addEventListener("click", async () => {
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 8000,
-        messages: [{ role: "user", content }]
+        messages: [{ role: "user", content }],
+        tools: [{
+          name: "record_reconciliation",
+          description: "Record the final reconciliation results after analysing all bank statements.",
+          input_schema: {
+            type: "object",
+            properties: {
+              flagged: {
+                type: "array",
+                description: "Transactions that don't match their account's assigned bucket.",
+                items: {
+                  type: "object",
+                  properties: {
+                    account: { type: "string" },
+                    merchant: { type: "string" },
+                    amount: { type: "string" },
+                    currency: { type: "string" },
+                    date: { type: "string" },
+                    actual_bucket: { type: "string" },
+                    should_be_bucket: { type: "string" }
+                  },
+                  required: ["account","merchant","amount","currency","actual_bucket","should_be_bucket"]
+                }
+              },
+              transfers: {
+                type: "array",
+                description: "Minimum net transfers needed to reconcile all accounts.",
+                items: {
+                  type: "object",
+                  properties: {
+                    from_account: { type: "string" },
+                    to_account: { type: "string" },
+                    amount: { type: "string" },
+                    currency: { type: "string" },
+                    reason: { type: "string" }
+                  },
+                  required: ["from_account","to_account","amount","currency"]
+                }
+              },
+              summary: { type: "string", description: "One sentence summary of findings." }
+            },
+            required: ["flagged","transfers","summary"]
+          }
+        }],
+        tool_choice: { type: "tool", name: "record_reconciliation" }
       })
     });
   } catch(e) {
@@ -495,30 +516,17 @@ document.getElementById("run-btn").addEventListener("click", async () => {
     return;
   }
 
-  const raw = (data.content || []).map(i => i.text || "").join("");
-  if (!raw) {
-    showError("API returned empty content.\nFull response:\n" + JSON.stringify(data, null, 2));
+  const toolUseBlock = (data.content || []).find(i => i.type === "tool_use" && i.name === "record_reconciliation");
+
+  if (!toolUseBlock) {
+    const textFallback = (data.content || []).map(i => i.text || "").join("");
+    showError("Claude didn't return structured results as expected.\nStop reason: " + (data.stop_reason || "unknown") + "\n\nResponse text (first 600 chars):\n" + textFallback.substring(0, 600));
     setStatus("", false);
     btn.disabled = false;
     return;
   }
 
-  let parsed;
-  try {
-    let clean = raw.replace(/```json|```/g, "").trim();
-    // If there's reasoning text before/after the JSON object, extract just the {...} block
-    const firstBrace = clean.indexOf("{");
-    const lastBrace = clean.lastIndexOf("}");
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      clean = clean.substring(firstBrace, lastBrace + 1);
-    }
-    parsed = JSON.parse(clean);
-  } catch(e) {
-    showError("Could not parse JSON from response:\n" + e.message + "\n\nRaw response (first 600 chars):\n" + raw.substring(0, 600));
-    setStatus("", false);
-    btn.disabled = false;
-    return;
-  }
+  const parsed = toolUseBlock.input;
 
   setStatus("", false);
   renderResults(parsed);
