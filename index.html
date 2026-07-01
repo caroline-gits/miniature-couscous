@@ -363,7 +363,9 @@ Take your time reasoning through the transactions — you may think out loud as 
 }
 
 function renderResults(data) {
-  const flagged = data.flagged || [];
+  const flagged = (data.flagged || []).filter(f =>
+    (f.actual_bucket || "").trim().toLowerCase() !== (f.should_be_bucket || "").trim().toLowerCase()
+  );
   const transfers = data.transfers || [];
   document.getElementById("results").innerHTML = `
     ${data.summary ? `<p class="summary-text">${data.summary}</p>` : ""}
@@ -452,7 +454,7 @@ document.getElementById("run-btn").addEventListener("click", async () => {
             properties: {
               flagged: {
                 type: "array",
-                description: "Transactions that don't match their account's assigned bucket.",
+                description: "Transactions that don't match their account's assigned bucket. Only include a transaction here if should_be_bucket is genuinely different from actual_bucket — never include a transaction where the correct bucket is the same as the one it was already in.",
                 items: {
                   type: "object",
                   properties: {
